@@ -1,0 +1,142 @@
+---
+title: "Testing PubMedRecords"
+author: "Prince Chikezie"
+date: "25/05/2020"
+output: html_document
+---
+
+
+# I was getting a backport error when installing from Github
+# Used this fix:
+# Sys.setenv(R_REMOTES_NO_ERRORS_FROM_WARNINGS="true")
+# Then ran the install code
+[source](https://github.com/gavinsimpson/ggvegan/issues/22)
+#Not sure how it may affect how R interacts with errors
+
+
+```{r Step 1, echo=TRUE}
+library(pubmedRecords)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(tidytext)
+library(wordcloud2)
+```
+
+
+#This works. keen to try it for chronic pain prevalence 
+#Maybe even Neuropathic. Search criteria has to be good 
+```{r Step 2a , echo=TRUE}
+df <-get_records(search_terms = "Kamerman PR[AU] AND Pain[TA]",
+            min_date = '2000/01/01',
+            max_date = '2020/06/25',
+            pub_type = 'journal article',
+            date_type = 'PDAT') 
+print(df)
+```
+
+#This works 
+```{r Step 2b, echo=TRUE}
+glimpse(df)
+```
+
+#This is cool 
+```{r Step 2c, echo=TRUE}
+df_citations <- get_citations(head(df))
+
+glimpse(df_citations)
+```
+
+# I am stuck here, keep getting: Error in eval(lhs, parent, parent) : object 
+# 'ngram_count' not found 
+# not sure if it is a dataframe issue or cant run the code like this 
+# Wont Knit
+```{r Step 3, echo=TRUE}
+
+words <- df %>% 
+  select(title) %>% 
+  unique(.) %>%
+tidy_words <- words %>%
+    unnest_tokens(word, title, token = "ngrams", n = 2) %>%
+    separate(word, into = c('word1', 'word2'), sep = ' ') %>%
+    filter(!word1 %in% stop_words$word) %>%
+    filter(!word2 %in% stop_words$word) %>%
+    mutate(word1 = ifelse(str_detect(word1, '[0-9]'),
+                         yes = NA,
+                         no = paste(word1))) %>%
+    mutate(word2 = ifelse(str_detect(word2, '[0-9]'),
+                          yes = NA,
+                          no = paste(word2))) %>%
+    filter(!is.na(word1)) %>%
+    filter(!is.na(word2)) %>%
+    unite(word, word1, word2, sep = ' ')%>%
+  #cant figure this out (seems like everything else is fine)
+    ngram_count <- tidy_words %>%
+    count(word) %>%
+    arrange(desc(n))%>%
+  word_cloud <- ngram_count[1:150, ] %>% 
+  rename(freq = n)%>%
+  wordcloud2(data = word_cloud,
+           fontFamily = 'arial',
+           size = 0.4,
+           color = ggthemes::tableau_color_pal(palette = 'Color Blind')(10))
+```
+#Played around with CSV format: same error as above 
+```{r Trials and tribulations I, echo=TRUE}
+df <- get_records(search_terms = "Kamerman PR[AU] AND Pain[TA]",
+            min_date = '2000/01/01',
+            max_date = '2020/06/25',
+            pub_type = 'journal article',
+            date_type = 'PDAT') 
+
+write.csv(df, "Kamerman")
+```
+
+# Trying bite sized chunks (copy-paste)
+```{r First, echo=TRUE}
+words <- df %>% 
+  # Select the title column
+  select(title) %>% 
+  # extract unique entries only
+  unique(.)
+```
+
+#Seem to be working
+```{r Second, echo=TRUE}
+tidy_words <- words %>%
+    unnest_tokens(word, title, token = "ngrams", n = 2) %>%
+    # Remove stopwords
+    separate(word, into = c('word1', 'word2'), sep = ' ') %>%
+    filter(!word1 %in% stop_words$word) %>%
+    filter(!word2 %in% stop_words$word) %>%
+    # Convert terms containing numerals to NA
+    mutate(word1 = ifelse(str_detect(word1, '[0-9]'),
+                         yes = NA,
+                         no = paste(word1))) %>%
+    mutate(word2 = ifelse(str_detect(word2, '[0-9]'),
+                          yes = NA,
+                          no = paste(word2))) %>%
+    # Remove NA
+    filter(!is.na(word1)) %>%
+    filter(!is.na(word2)) %>%
+    # Join word columns them back together to form 2-ngrams
+    unite(word, word1, word2, sep = ' ')
+```
+
+```{r Third, echo=TRUE}
+ngram_count <- tidy_words %>%
+    count(word) %>%
+    arrange(desc(n))
+```
+
+#Didn't win_sadface
+```{r Fourth, echo=TRUE}
+word_cloud <- ngram_count[1:150, ] %>% 
+  rename(freq = n)
+  
+wordcloud2(data = word_cloud,
+           fontFamily = 'arial',
+           size = 0.4,
+           color = ggthemes::tableau_color_pal(palette = 'Color Blind')(10))
+```
+
